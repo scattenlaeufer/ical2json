@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "ical2json"
+version = "0.1.0"
+description = ""
+authors = ["Björn Guth <bjoern.guth@aixigo.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
