@@ -33,6 +33,7 @@ class Event(BaseModel):
     """
     Representation of an event for calendar
     """
+
     uid: str
     summary: str
     start: datetime.datetime | datetime.date
@@ -57,20 +58,26 @@ class Calendar(BaseModel):
     """
     Representation of a Calendar with an Event list
     """
+
     name: str
     color: str
     events: list[Event]
 
     @classmethod
-    def from_ics(cls, ics: str):
+    def from_ics(cls, ics: str, from_now: bool = False):
         """
         Create a Calendar object from an `ics.calendar.Calendar` object
 
         :param ics: Calendar string in ics format
+        :param from_now: If true, only events that haven't ended or are in the future are used
         """
         ics_calendar = IcsCalendarStream.calendar_from_ics(ics)
         event_list: list[Event] = []
         for event in ics_calendar.timeline:
+            if from_now and datetime.datetime.now() > datetime.datetime.fromisoformat(
+                event.end.isoformat()
+            ):
+                continue
             event_list.append(Event.from_ical_event(event))
         extras = {e.name: e.value for e in ics_calendar.extras}
         return cls(
