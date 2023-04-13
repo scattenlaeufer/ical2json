@@ -17,6 +17,5 @@ def get_nextcloud_calendar(uri: str):
     password = os.environ["NEXTCLOUD_PASSWORD"]
 
     ical_data = ical2json.get_ics_calendar(url, uri, user, password)
-    calendar = ical2json.convert_ics_to_calendar(ical_data)
-    calendar_dict = ical2json.convert_calendar_to_dict(calendar)
-    return calendar_dict
+    calendar = ical2json.Calendar.from_ics(ical_data)
+    return calendar

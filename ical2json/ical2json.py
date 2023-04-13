@@ -5,13 +5,16 @@ A python script to parse Nextcloud ical calendars to JSON
 """
 
 import argparse
+import datetime
 import json
 import logging
 import os
-from typing import Dict,List, Optional
+from typing import Dict, List, Optional
 import requests
-from ical.calendar import Calendar
+import ical
+from ical.calendar import Calendar as IcalCalendar
 from ical.calendar_stream import IcsCalendarStream
+from pydantic import BaseModel
 from rich.logging import RichHandler
 from rich.traceback import install
 
@@ -26,6 +29,57 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
+class Event(BaseModel):
+    """
+    Representation of an event for calendar
+    """
+    uid: str
+    summary: str
+    start: datetime.datetime | datetime.date
+    end: datetime.datetime | datetime.date | None
+
+    @classmethod
+    def from_ical_event(cls, event: ical.event.Event):
+        """
+        Create an Event object from an `ics.event.Event` object
+
+        :param event: Event from which to create the object
+        """
+        return cls(
+            uid=event.uid,
+            summary=event.summary,
+            start=event.start,
+            end=event.end,
+        )
+
+
+class Calendar(BaseModel):
+    """
+    Representation of a Calendar with an Event list
+    """
+    name: str
+    color: str
+    events: list[Event]
+
+    @classmethod
+    def from_ics(cls, ics: str):
+        """
+        Create a Calendar object from an `ics.calendar.Calendar` object
+
+        :param ics: Calendar string in ics format
+        """
+        ics_calendar = IcsCalendarStream.calendar_from_ics(ics)
+        event_list: list[Event] = []
+        for event in ics_calendar.timeline:
+            event_list.append(Event.from_ical_event(event))
+        extras = {e.name: e.value for e in ics_calendar.extras}
+        return cls(
+            name=extras.get("x-wr-calname", ""),
+            color=extras.get("x-apple-calendar-color", "#000000"),
+            events=event_list,
+        )
+
+
 def get_ics_calendar(base_url: str, uri: str, user: str, password: str) -> str:
     """
     Pull a ical calendar in ics format from Nextcloud
@@ -36,7 +90,7 @@ def get_ics_calendar(base_url: str, uri: str, user: str, password: str) -> str:
     :param password: Password for the user
     :return: The calendar in ics format
     """
-    log.debug("getting the ical calendar from nextcloud")
+    log.debug("getting the ical calenadar from nextcloud")
 
     response = requests.get(
         f"{base_url}/remote.php/dav/calendars/{user}/{uri}",
@@ -46,47 +100,6 @@ def get_ics_calendar(base_url: str, uri: str, user: str, password: str) -> str:
     )
 
     return response.text
-
-
-def convert_ics_to_calendar(ics: str) -> Calendar:
-    """
-    Convert a calendar in .ics format to a Calendar object
-
-    :param ics: String of the ics calendar data
-    :return: Parsed Calendar object
-    """
-    calendar = IcsCalendarStream.calendar_from_ics(ics)
-
-    return calendar
-
-
-def convert_calendar_to_dict(calendar: Calendar) -> dict:
-    """
-    Convert a Calendar object to a dictionary
-
-    This contains some meta data and the events in form of a timeline.
-
-    :param calendar: The Calendar object to parse
-    :return: The parsed calendar data
-    """
-    calendar_dict: Dict[str, str|List] = {"x-wr-calname": "n/a"}
-    for extra in calendar.extras:
-        calendar_dict[extra.name] = extra.value
-    event_list: List[Dict[str, Optional[str]]] = []
-    for event in calendar.timeline:
-        log.debug(event)
-        event_dict: Dict[str, Optional[str]] = {
-            "uid": event.uid,
-            "dtstart": event.dtstart.isoformat(),
-            "summary": event.summary,
-        }
-        if end := event.dtend:
-            event_dict["dtend"] = end.isoformat()
-        else:
-            event_dict["dtend"] = None
-        event_list.append(event_dict)
-    calendar_dict["events"] = event_list
-    return calendar_dict
 
 
 def main(base_url: str, uri: str, user: str, password: str) -> str:
@@ -108,12 +121,9 @@ def main(base_url: str, uri: str, user: str, password: str) -> str:
     )
 
     ics = get_ics_calendar(base_url, uri, user, password)
-    calendar = convert_ics_to_calendar(ics)
-    event_list = convert_calendar_to_dict(calendar)
-
-    log.debug(event_list)
-
-    return json.dumps(event_list)
+    calendar = Calendar.from_ics(ics)
+    log.debug(calendar)
+    return calendar.json()
 
 
 if __name__ == "__main__":
