@@ -1,0 +1,8 @@
+---
+version: "3.8"
+
+services:
+  ical2json:
+    container_name: ical2json
+    build: ./
+# vim: set ft=yaml.docker-compose:
